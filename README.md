@@ -351,5 +351,125 @@ Last login: Sat Jun 25 13:17:02 2022 from 10.0.2.2
 
 <p>Как видим, ядро обновилось до версии 5.</p>
 
+<p>Выходим из системы командой CTRL+D</p>
 
+<pre>[vagrant@kernel-update ~]$ logout
+Connection to 127.0.0.1 closed.
+[user@localhost manual_kernel_update]$</pre>
+
+<h4>**Packer**</h4>
+
+<p>Теперь необходимо создать свой образ системы, с уже установленым ядром 5й версии. Для это воспользуемся ранее установленной утилитой `packer`. В директории `packer` есть все необходимые настройки и скрипты для создания необходимого образа системы.</p>
+
+<h4>**packer provision config**</h4>
+
+<p>Файл `centos.json` содержит описание того, как произвольный образ. Полное описание можно найти в документации к `packer`. Обратим внимание на основные секции или ключи.<br />
+Создаем переменные (`variables`) с версией и названием нашего проекта (artifact):</p>
+
+<pre>[user@localhost manual_kernel_update]$ cd ./packer/
+[user@localhost packer]$ vi ./centos.json</pre>
+
+<pre>...
+"variables": {
+    "artifact_description": "CentOS 7.9 with kernel 5.x",
+    "artifact_version": "7.9.2009",
+    "image_name": "centos-7.9"
+  },
+  ...</pre>
+
+<p>В секции `builders` задаем исходный образ, для создания своего в виде ссылки и контрольной суммы. Параметры подключения к создаваемой виртуальной машине.</p>
+
+<pre>...
+  "builders": [
+    {
+...
+      "iso_url": "https://mirror.yandex.ru/centos/7.9.2009/isos/x86_64/CentOS-7-x86_64-Minimal-2009.iso",
+      "iso_checksum": "07b94e6b1a0b0260b94c83d6bb76b26bf7a310dc78d7a9c7432809fb9bc6194a",
+      "iso_checksum_type": "sha256",
+...
+      ],
+...</pre>
+
+<p>В секции `provisioners` указываем каким образом и какие действия необходимо произвести для настройки виртуальой машины. Именно в этой секции мы и обновим ядро системы, чтобы можно было получить образ с 5й версией ядра. Настройка системы выполняется несколькими скриптами, заданными в секции `scripts`.</p>
+
+<pre>...
+          "scripts" :
+            [
+              "scripts/stage-1-kernel-update.sh",
+              "scripts/stage-2-clean.sh"
+            ]
+...</pre>
+
+<p>Содержимое скрипта stage-1-kernel-update.sh</p>
+
+<pre>[user@localhost packer]$ cat ./scripts/stage-1-kernel-update.sh 
+#!/bin/bash
+
+# Install elrepo
+yum install -y http://www.elrepo.org/elrepo-release-7.0-5.el7.elrepo.noarch.rpm
+# Install new kernel
+yum --enablerepo elrepo-kernel install kernel-ml -y
+# Remove older kernels (Only for demo! Not Production!)
+rm -f /boot/*3.10*
+# Update GRUB
+grub2-mkconfig -o /boot/grub2/grub.cfg
+grub2-set-default 0
+echo "Grub update done."
+# Reboot VM
+shutdown -r now
+[user@localhost packer]$</pre>
+
+<p>Содержимое скрипта stage-1-kernel-update.sh</p>
+
+<pre>[user@localhost packer]$ cat ./scripts/stage-2-clean.sh 
+#!/bin/bash
+
+# clean all
+yum update -y
+yum clean all
+
+
+# Install vagrant default key
+mkdir -pm 700 /home/vagrant/.ssh
+curl -sL https://raw.githubusercontent.com/mitchellh/vagrant/master/keys/vagrant.pub -o /home/vagrant/.ssh/authorized_keys
+chmod 0600 /home/vagrant/.ssh/authorized_keys
+chown -R vagrant:vagrant /home/vagrant/.ssh
+
+
+# Remove temporary files
+rm -rf /tmp/*
+rm  -f /var/log/wtmp /var/log/btmp
+rm -rf /var/cache/* /usr/share/doc/*
+rm -rf /var/cache/yum
+rm -rf /vagrant/home/*.iso
+rm  -f ~/.bash_history
+history -c
+
+rm -rf /run/log/journal/*
+
+# Fill zeros all empty space
+dd if=/dev/zero of=/EMPTY bs=1M
+rm -f /EMPTY
+sync
+grub2-set-default 1
+echo "###   Hi from secone stage" >> /boot/grub2/grub.cfg
+[user@localhost packer]$</pre>
+
+<p>Секция `post-processors` описывает постобработку виртуальной машины при ее выгрузке. Мы указыаем имя файла, в который будет сохранен результат (artifact). Обратите внимание, что имя задается на основе ранее созданной пользовательской переменной `artifact_version` значение которой мы задали ранее:</p>
+
+<pre>...
+  "post-processors": [
+    {
+      "output": "centos-{{user `artifact_version`}}-kernel-5-x86_64-Minimal.box",
+      "compression_level": "7",
+      "type": "vagrant"
+    }
+  ],
+  ...</pre>
+
+<h4>**packer build**</h4>
+
+<p>Для создания образа системы достаточно перейти в директорию `packer` и в ней выполнить команду:</p>
+
+<pre>[user@localhost packer]$ packer build ./centos.json</pre>
 
