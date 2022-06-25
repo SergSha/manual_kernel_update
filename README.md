@@ -520,7 +520,7 @@ centos-7-9  (virtualbox, 0)
 <p>Теперь необходимо провести тестирование полученного образа. Для этого создадим новый Vagrantfile или воспользуемся имеющимся. Для нового создадим директорию `test` и перейдём в неё:</p>
 
 <pre>[user@localhost otus]$ mkdir ./test/
-<pre>[user@localhost otus]$ cd ./test/
+[user@localhost otus]$ cd ./test/
 [user@localhost test]$</pre>
 
 <p>Скопируем туда имеющийся Vagrantfile:</p>
