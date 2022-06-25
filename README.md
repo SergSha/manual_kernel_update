@@ -370,35 +370,54 @@ Connection to 127.0.0.1 closed.
 [user@localhost packer]$ vi ./centos.json</pre>
 
 <pre>...
-"variables": {
+  "variables": {
     "artifact_description": "CentOS 7.9 with kernel 5.x",
     "artifact_version": "7.9.2009",
     "image_name": "centos-7.9"
-  },
+  }
   ...</pre>
 
-<p>В секции `builders` задаем исходный образ, для создания своего в виде ссылки и контрольной суммы. Параметры подключения к создаваемой виртуальной машине.</p>
+<p>В секции `builders` задаем исходный образ, для создания своего в виде ссылки и контрольной суммы. Параметры подключения к создаваемой виртуальной машине.В конце В конце добавим строку "headless": true, чтобы не возникали ошибки в консольной (без графики) версии.</p>
 
 <pre>...
   "builders": [
     {
-...
+  ...
+      "iso_checksum": "sha256:07b94e6b1a0b0260b94c83d6bb76b26bf7a310dc78d7a9c7432809fb9bc6194a",
       "iso_url": "https://mirror.yandex.ru/centos/7.9.2009/isos/x86_64/CentOS-7-x86_64-Minimal-2009.iso",
-      "iso_checksum": "07b94e6b1a0b0260b94c83d6bb76b26bf7a310dc78d7a9c7432809fb9bc6194a",
-      "iso_checksum_type": "sha256",
-...
-      ],
+  ...
+      "vm_name": "packer-centos-vm",
+      "headless": true,
+    }
+  ],
 ...</pre>
 
 <p>В секции `provisioners` указываем каким образом и какие действия необходимо произвести для настройки виртуальой машины. Именно в этой секции мы и обновим ядро системы, чтобы можно было получить образ с 5й версией ядра. Настройка системы выполняется несколькими скриптами, заданными в секции `scripts`.</p>
 
 <pre>...
-          "scripts" :
-            [
-              "scripts/stage-1-kernel-update.sh",
-              "scripts/stage-2-clean.sh"
-            ]
+  "provisioners": [
+  ...
+          "scripts": [
+            "scripts/stage-1-kernel-update.sh",
+            "scripts/stage-2-clean.sh"
+          ]
+  ...
+  ],
+
 ...</pre>
+
+<p>Секция `post-processors` описывает постобработку виртуальной машины при ее выгрузке. Мы указыаем имя файла, в который будет сохранен результат (artifact). Обратите внимание, что имя задается на основе ранее созданной пользовательской переменной `artifact_version` значение которой мы задали ранее:</p>
+
+<pre>...
+  "post-processors": [
+    {
+      "compression_level": "7",
+      "output": "centos-{{user `artifact_version`}}-kernel-5-x86_64-Minimal.box",
+      "type": "vagrant"
+    }
+  ],
+
+  ...</pre>
 
 <p>Содержимое скрипта stage-1-kernel-update.sh</p>
 
@@ -455,21 +474,190 @@ grub2-set-default 1
 echo "###   Hi from secone stage" >> /boot/grub2/grub.cfg
 [user@localhost packer]$</pre>
 
-<p>Секция `post-processors` описывает постобработку виртуальной машины при ее выгрузке. Мы указыаем имя файла, в который будет сохранен результат (artifact). Обратите внимание, что имя задается на основе ранее созданной пользовательской переменной `artifact_version` значение которой мы задали ранее:</p>
-
-<pre>...
-  "post-processors": [
-    {
-      "output": "centos-{{user `artifact_version`}}-kernel-5-x86_64-Minimal.box",
-      "compression_level": "7",
-      "type": "vagrant"
-    }
-  ],
-  ...</pre>
-
 <h4>**packer build**</h4>
 
 <p>Для создания образа системы достаточно перейти в директорию `packer` и в ней выполнить команду:</p>
 
-<pre>[user@localhost packer]$ packer build ./centos.json</pre>
+<pre>[user@localhost packer]$ packer build ./centos.json
+...
+Build 'centos-7.9' finished after 15 minutes 19 seconds.
 
+==> Wait completed after 15 minutes 19 seconds
+
+==> Builds finished. The artifacts of successful builds are:
+--> centos-7.9: 'virtualbox' provider box: centos-7.9.2009-kernel-5-x86_64-Minimal.box
+[user@localhost packer]$</pre>
+
+<p>Если все в порядке, то, согласно файла `config.json` будет скачан исходный iso-образ CentOS, установлен на виртуальную машину в автоматическом режиме, обновлено ядро и осуществлен экспорт в указанный нами файл. Если не вносилось изменений в предложенные файлы, то в текущей директории мы увидим файл `centos-7.9.2009-kernel-5-x86_64-Minimal.box`. Он и является результатом работы `packer`.</p>
+
+<pre>[user@localhost packer]$ ls -l
+total 832352
+-rw-rw-r--. 1 user user 852323872 июн 25 22:03 centos-7.9.2009-kernel-5-x86_64-Minimal.box
+-rw-rw-r--. 1 user user      2038 июн 25 21:37 centos.json
+drwxrwxr-x. 2 user user        24 июн 25 16:01 http
+drwxrwxr-x. 2 user user        62 июн 25 17:46 scripts
+[user@localhost packer]$</pre>
+
+<h4>**vagrant init (тестирование)**</h4>
+
+<p>Проведем тестирование созданного образа. Выполним его импорт в `vagrant`:</p>
+
+<pre>[user@localhost packer]$ vagrant box add centos-7-9 ./centos-7.9.2009-kernel-5-x86_64-Minimal.box 
+==> box: Box file was not detected as metadata. Adding it directly...
+==> box: Adding box 'centos-7-9' (v0) for provider: 
+    box: Unpacking necessary files from: file:///home/user/otus/manual_kernel_update/packer/centos-7.9.2009-kernel-5-x86_64-Minimal.box
+==> box: Successfully added box 'centos-7-9' (v0) for 'virtualbox'!
+[user@localhost packer]$</pre>
+
+<p>Проверим его в списке имеющихся образов:</p>
+
+<pre>[user@localhost packer]$ vagrant box list
+centos-7-9  (virtualbox, 0)
+[user@localhost packer]$</pre>
+
+<p>Он будет называться `centos-7-5`, данное имя мы задали при помощи параметра `name` при импорте.</p>
+
+<p>Теперь необходимо провести тестирование полученного образа. Для этого создадим новый Vagrantfile или воспользуемся имеющимся. Для нового создадим директорию `test` и перейдём в неё:</p>
+
+<pre>[user@localhost otus]$ mkdir ./test/
+<pre>[user@localhost otus]$ cd ./test/
+[user@localhost test]$</pre>
+
+<p>Скопируем туда имеющийся Vagrantfile:</p>
+
+<pre>[user@localhost test]$ cp ../manual_kernel_update/Vagrantfile .
+[user@localhost test]$ ls -l
+total 4
+-rw-rw-r--. 1 user user 1335 июн 25 23:23 Vagrantfile
+[user@localhost test]$</pre>
+
+<p>Для имеющегося Vagrantfile произведем замену значения `box_name` на имя импортированного образа. Соотвествующая строка примет вид:</p>
+
+<pre>...
+              :box_name => "centos-7-9",
+...</pre>
+
+<p>Теперь запустим виртуальную машину:</p>
+
+<pre>[user@localhost test]$ vagrant up
+Bringing machine 'kernel-update' up with 'virtualbox' provider...
+==> kernel-update: Importing base box 'centos-7-9'...
+==> kernel-update: Matching MAC address for NAT networking...
+==> kernel-update: Setting the name of the VM: test_kernel-update_1656189042721_88755
+==> kernel-update: Fixed port collision for 22 => 2222. Now on port 2201.
+==> kernel-update: Clearing any previously set network interfaces...
+==> kernel-update: Preparing network interfaces based on configuration...
+    kernel-update: Adapter 1: nat
+==> kernel-update: Forwarding ports...
+    kernel-update: 22 (guest) => 2201 (host) (adapter 1)
+==> kernel-update: Running 'pre-boot' VM customizations...
+==> kernel-update: Booting VM...
+==> kernel-update: Waiting for machine to boot. This may take a few minutes...
+    kernel-update: SSH address: 127.0.0.1:2201
+    kernel-update: SSH username: vagrant
+    kernel-update: SSH auth method: private key
+    kernel-update: 
+    kernel-update: Vagrant insecure key detected. Vagrant will automatically replace
+    kernel-update: this with a newly generated keypair for better security.
+    kernel-update: 
+    kernel-update: Inserting generated public key within guest...
+    kernel-update: Removing insecure key from the guest if it's present...
+    kernel-update: Key inserted! Disconnecting and reconnecting using new SSH key...
+==> kernel-update: Machine booted and ready!
+==> kernel-update: Checking for guest additions in VM...
+    kernel-update: No guest additions were detected on the base box for this VM! Guest
+    kernel-update: additions are required for forwarded ports, shared folders, host only
+    kernel-update: networking, and more. If SSH fails on this machine, please install
+    kernel-update: the guest additions and repackage the box to continue.
+    kernel-update: 
+    kernel-update: This is not an error message; everything may continue to work properly,
+    kernel-update: in which case you may ignore this message.
+==> kernel-update: Setting hostname...
+[user@localhost test]$</pre>
+
+<p>Подключимся к ней:</p>
+
+<pre>[user@localhost test]$ vagrant ssh
+Last login: Sat Jun 25 19:01:09 2022 from 10.0.2.2
+[vagrant@kernel-update ~]$</pre>
+
+<p>Проверим, что у нас в ней новое ядро:</p>
+
+<pre>[vagrant@kernel-update ~]$ uname -r
+5.18.7-1.el7.elrepo.x86_64
+[vagrant@kernel-update ~]$</pre>
+
+<p>Машина запустилась и загрузилась с новым ядром. В данном случае это `5.18.7`.</p>
+
+<p>Удалим тестовый образ из локального хранилища:</p>
+
+<pre>[user@localhost test]$ vagrant box remove centos-7-9 -f
+Removing box 'centos-7-9' (v0) with provider 'virtualbox'...
+[user@localhost test]$</pre>
+
+<h4>**Vagrant cloud**</h4>
+
+<p>Поделимся полученным образом с сообществом. Для этого зальем его в Vagrant Cloud. Можно залить через web-интерфейс, но так же `vagrant` позволяет это проделать через CLI.</p>
+
+<p>Вернемся в директорию, где находится наш образ centos-7.9.2009-kernel-5-x86_64-Minimal.box:</p>
+
+<pre>[user@localhost test]$ cd ../manual_kernel_update/packer/
+[user@localhost packer]$</pre>
+
+<p>Логинимся в `vagrant cloud`, указывая e-mail, пароль и описание выданого токена (можно оставить по-умолчанию)</p>
+
+<pre>[user@localhost packer]$ vagrant cloud auth login
+In a moment we will ask for your username and password to HashiCorp's
+Vagrant Cloud. After authenticating, we will store an access token locally on
+disk. Your login details will be transmitted over a secure connection, and
+are never stored on disk locally.
+
+If you do not have an Vagrant Cloud account, sign up at
+https://www.vagrantcloud.com
+
+Vagrant Cloud username or email: sergsha
+Password (will be hidden): 
+Token description (Defaults to "Vagrant login from localhost.localdomain"): 
+You are now logged in.
+[user@localhost packer]$</pre>
+
+<p>Теперь публикуем полученный бокс,<br />
+где:<br />
+ - `cloud publish` - загрузить образ в облако;<br />
+ - `--no-private` - НЕприватный:<br />
+ - `release` - указывает на необходимость публикации образа после загрузки;<br />
+ - `sergsha/centos-7-9` - `username`, указаный при публикации и имя образа;<br />
+ - `1.0` - версия образа;<br />
+ - `virtualbox` - провайдер;<br />
+ - `centos-7.9.2009-kernel-5-x86_64-Minimal.box` - имя файла загружаемого образа</p>
+
+<pre>[user@localhost packer]$ vagrant cloud publish --no-private --release sergsha/centos-7-9 1.0 virtualbox ./centos-7.9.2009-kernel-5-x86_64-Minimal.box 
+You are about to publish a box on Vagrant Cloud with the following options:
+sergsha/centos-7-9:   (v1.0) for provider 'virtualbox'
+Automatic Release:     true
+Do you wish to continue? [y/N]y
+Saving box information...
+Uploading provider with file /home/user/otus/manual_kernel_update/packer/centos-7.9.2009-kernel-5-x86_64-Minimal.box
+Releasing box...
+Complete! Published sergsha/centos-7-9
+Box:              sergsha/centos-7-9
+Description:      
+Private:          no
+Created:          2022-06-26T00:02:46.016+03:00
+Updated:          2022-06-26T00:02:46.016+03:00
+Current Version:  N/A
+Versions:         1.0
+Downloads:        0
+[user@localhost packer]$</pre>
+
+![image](https://user-images.githubusercontent.com/96518320/175790808-637ea942-e4a0-4ea5-b563-1803bf269554.png)
+
+![image](https://user-images.githubusercontent.com/96518320/175790834-a52d1bce-ec99-4b15-bad8-4d99b2c4b36e.png)
+
+<p>В результате создан и загружен в `vagrant cloud` образ виртуальной машины.</p>
+
+<p>В Vagrantfile произведем замену значения `box_name` на `sergsha/centos-7-9`. Соотвествующая строка примет вид:</p>
+
+<pre>...
+              :box_name => "sergsha/centos-7-9",
+...</pre>
