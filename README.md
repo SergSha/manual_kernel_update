@@ -661,3 +661,85 @@ Downloads:        0
 <pre>...
               :box_name => "sergsha/centos-7-9",
 ...</pre>
+
+<p>С новым Vagrantfile запустим виртуальную машину:</p>
+
+<pre>[user@localhost manual_kernel_update]$ vagrant up
+Bringing machine 'kernel-update' up with 'virtualbox' provider...
+==> kernel-update: Box 'sergsha/centos-7-9' could not be found. Attempting to find and install...
+    kernel-update: Box Provider: virtualbox
+    kernel-update: Box Version: >= 0
+==> kernel-update: Loading metadata for box 'sergsha/centos-7-9'
+    kernel-update: URL: https://vagrantcloud.com/sergsha/centos-7-9
+==> kernel-update: Adding box 'sergsha/centos-7-9' (v1.0) for provider: virtualbox
+    kernel-update: Downloading: https://vagrantcloud.com/sergsha/boxes/centos-7-9/versions/1.0/providers/virtualbox.box
+==> kernel-update: Successfully added box 'sergsha/centos-7-9' (v1.0) for 'virtualbox'!
+==> kernel-update: Importing base box 'sergsha/centos-7-9'...
+==> kernel-update: Matching MAC address for NAT networking...
+==> kernel-update: Checking if box 'sergsha/centos-7-9' version '1.0' is up to date...
+==> kernel-update: Setting the name of the VM: manual_kernel_update_kernel-update_1656193652567_72455
+==> kernel-update: Fixed port collision for 22 => 2222. Now on port 2200.
+==> kernel-update: Clearing any previously set network interfaces...
+==> kernel-update: Preparing network interfaces based on configuration...
+    kernel-update: Adapter 1: nat
+==> kernel-update: Forwarding ports...
+    kernel-update: 22 (guest) => 2200 (host) (adapter 1)
+==> kernel-update: Running 'pre-boot' VM customizations...
+==> kernel-update: Booting VM...
+==> kernel-update: Waiting for machine to boot. This may take a few minutes...
+    kernel-update: SSH address: 127.0.0.1:2200
+    kernel-update: SSH username: vagrant
+    kernel-update: SSH auth method: private key
+    kernel-update: 
+    kernel-update: Vagrant insecure key detected. Vagrant will automatically replace
+    kernel-update: this with a newly generated keypair for better security.
+    kernel-update: 
+    kernel-update: Inserting generated public key within guest...
+    kernel-update: Removing insecure key from the guest if it's present...
+    kernel-update: Key inserted! Disconnecting and reconnecting using new SSH key...
+==> kernel-update: Machine booted and ready!
+==> kernel-update: Checking for guest additions in VM...
+    kernel-update: No guest additions were detected on the base box for this VM! Guest
+    kernel-update: additions are required for forwarded ports, shared folders, host only
+    kernel-update: networking, and more. If SSH fails on this machine, please install
+    kernel-update: the guest additions and repackage the box to continue.
+    kernel-update: 
+    kernel-update: This is not an error message; everything may continue to work properly,
+    kernel-update: in which case you may ignore this message.
+==> kernel-update: Setting hostname...
+[user@localhost manual_kernel_update]$</pre>
+
+<p>Проверим статус запущенной машины:</p>
+
+<pre>[user@localhost manual_kernel_update]$ vagrant status
+Current machine states:
+
+kernel-update             running (virtualbox)
+
+The VM is running. To stop this VM, you can run `vagrant halt` to
+shut it down forcefully, or you can run `vagrant suspend` to simply
+suspend the virtual machine. In either case, to restart it again,
+simply run `vagrant up`.
+[user@localhost manual_kernel_update]$</pre>
+
+<p>Подключаемся к ней с помощью SSH:</p>
+
+<pre>[user@localhost manual_kernel_update]$ vagrant ssh
+Last login: Sat Jun 25 19:01:09 2022 from 10.0.2.2
+[vagrant@kernel-update ~]$</pre>
+
+<p>Смотрим версию ОС:</p>
+
+<pre>[vagrant@kernel-update ~]$ cat /etc/redhat-release
+CentOS Linux release 7.9.2009 (Core)
+[vagrant@kernel-update ~]$</pre>
+
+<p>Смотрим версию ядра:</p>
+
+<pre>[vagrant@kernel-update ~]$ uname -r
+5.18.7-1.el7.elrepo.x86_64
+[vagrant@kernel-update ~]$</pre>
+
+<h4>**Заключение**</h4>
+
+<p>В результате выполнения ранее описанных действий получили свой образ с обновленным ядром, этот образ был загружен в Vagrant Cloud. В github.com запушен модифицированный Vagrantfile, который в случае запуска виртуальной машины загружает наш образ с Vagrant Cloud.</p>
